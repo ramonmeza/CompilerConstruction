@@ -3,49 +3,8 @@
          racket/list)
 
 ;;;
-;;; Flatten
-;;;
-
-
-;; HAS EXTRA PARENS
-(define (flatten exp)
-  (match exp
-    [(? symbol?) (values exp `() `())]
-    [(? integer?) (values exp `() `())]
-
-    [`(read)
-     (define new-var (gensym `tmp))
-     (define new-assign `(assign ,new-var `(read)))
-     (values new-var (list new-assign) (list new-var))]
-    
-    [`(- ,v)
-     (define-values (flat-exp flat-assigns flat-all-vars) (flatten v))
-     (define new-var (gensym `tmp))
-     (define new-assign `(assign ,new-var (- ,flat-exp)))
-     (values new-var (append flat-assigns (list new-assign)) (append flat-all-vars (list new-var)))]
-
-    [`(+ ,v1 ,v2)
-     (define-values (LHS-exp LHS-assigns LHS-vars) (flatten v1))
-     (define-values (RHS-exp RHS-assigns RHS-vars) (flatten v2))
-     (define new-var (gensym `tmp))
-     (define new-assign `(assign ,new-var (+ ,LHS-exp ,RHS-exp)))
-     (values new-var (append LHS-assigns RHS-assigns (list new-assign)) (append LHS-vars RHS-vars (list new-var)))]  
-
-    [`(let ([,x ,v]) ,body)
-     (define-values (flat-exp flat-assigns flat-all-vars) (flatten v))
-     (define new-assign `(assign ,x (,flat-exp)))
-     (define-values (body-flat-exp body-flat-assigns body-flat-all-vars) (flatten body))
-     (values body-flat-exp (append flat-assigns (list new-assign) body-flat-assigns) (append flat-all-vars body-flat-all-vars (list x)))] 
-    
-    [`(program ,body)
-     (define-values (flat-exp flat-assigns flat-all-vars) (flatten body))
-     `(program ,flat-all-vars ,flat-assigns (return ,flat-exp))] 
-    ))
-
-;;;
 ;;; Uniquify
 ;;;
-
 (define (uniquify p)
   (match p
     [`(program ,exp) `(program ,(uniquify-exp (Key-Value-Empty) exp))]
@@ -64,17 +23,62 @@
     [`(+ ,(app recur v1) ,(app recur v2)) `(+ ,v1 ,v2)]
     ))
 
+
+;;;
+;;; Flatten
+;;;
+(define (flatten-R1 exp)
+  (match exp
+    [(? symbol?) (values exp `() `())]
+    [(? integer?) (values exp `() `())]
+
+    [`(read)
+     (define new-var (gensym `tmp))
+     (define new-assign `(assign ,new-var (read)))
+     (values new-var (list new-assign) (list new-var))]
+    
+    [`(- ,v)
+     (define-values (flat-exp flat-assigns flat-all-vars) (flatten-R1 v))
+     (define new-var (gensym `tmp))
+     (define new-assign `(assign ,new-var (- ,flat-exp)))
+     (values new-var (append flat-assigns (list new-assign)) (append flat-all-vars (list new-var)))]
+
+    [`(+ ,v1 ,v2)
+     (define-values (LHS-exp LHS-assigns LHS-vars) (flatten-R1 v1))
+     (define-values (RHS-exp RHS-assigns RHS-vars) (flatten-R1 v2))
+     (define new-var (gensym `tmp))
+     (define new-assign `(assign ,new-var (+ ,LHS-exp ,RHS-exp)))
+     (values new-var (append LHS-assigns RHS-assigns (list new-assign)) (append LHS-vars RHS-vars (list new-var)))]  
+
+    [`(let ([,x ,v]) ,body)
+     (define-values (flat-exp flat-assigns flat-all-vars) (flatten-R1 v))
+     (define new-assign `(assign ,x (,flat-exp)))
+     (define-values (body-flat-exp body-flat-assigns body-flat-all-vars) (flatten-R1 body))
+     (values body-flat-exp (append flat-assigns (list new-assign) body-flat-assigns) (append flat-all-vars body-flat-all-vars (list x)))] 
+    
+    [`(program ,body)
+     (define-values (flat-exp flat-assigns flat-all-vars) (flatten-R1 body))
+     (define assigns flat-assigns)
+     (list* `program flat-all-vars (append assigns `((return ,flat-exp))))] 
+    ))
+
+;;;
+;;; Select Instructions
+;;;
+(define (select-instructions exp)
+  (match exp
+    [`(program ,vars ,assigns ,return)
+     `(program ,vars)]
+    ))
+
 ;;;
 ;;; R1 Interpreter
 ;;;
-
-;; Make sure programs START with program keyword
 (define (interp-R1 p)
   (match p
     [`(program ,exp) (interp-R1-exp (Key-Value-Empty) exp)]
     ))
 
-;; Interpret an R1 expression
 (define (interp-R1-exp env exp)
   (define (recur e) (interp-R1-exp env e))
   (match exp
@@ -96,7 +100,6 @@
 ;;;
 ;;; Helper Functions & Misc.
 ;;;
-
 ;; Key-Value Data Structure
 (struct Key-Value-Empty () #:transparent)
 (struct Key-Value-Node (Key Value Rest) #:transparent)
@@ -130,9 +133,11 @@
   (newline)
   (uniquify program))
 
-;; Test flatten
+;; Test flatten-R1
 (module+ test
   (newline)
-  (print "Testing flatten...")
+  (print "Testing flatten-R1...")
   (newline)
-  (flatten program))
+  (flatten-R1 program))
+
+;; Test select instructions
