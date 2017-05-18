@@ -13,6 +13,11 @@
     [(? symbol?) (values exp `() `())]
     [(? integer?) (values exp `() `())]
 
+    [`(read)
+     (define new-var (gensym `tmp))
+     (define new-assign `(assign ,new-var `(read)))
+     (values new-var (list new-assign) (list new-var))]
+    
     [`(- ,v)
      (define-values (flat-exp flat-assigns flat-all-vars) (flatten v))
      (define new-var (gensym `tmp))
@@ -114,7 +119,7 @@
 ;; Program to test
 (define program
   `(program
-    (let ([x (+ (- 4) (- 5))]) (+ x 2))
+    (let ([x (+ (- (read)) (- 5))]) (+ x 2))
     )
   )
 
