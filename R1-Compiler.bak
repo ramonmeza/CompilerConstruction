@@ -8,32 +8,17 @@
 
 
 ;; HAS EXTRA PARENS
-(define (flatten exp)
+(define (flatten-R1 exp)
   (match exp
     [(? symbol?) (values exp `() `())]
     [(? integer?) (values exp `() `())]
 
     [`(- ,v)
-     (define-values (flat-exp flat-assigns flat-all-vars) (flatten v))
-     (define new-var (gensym `tmp))
-     (define new-assign `(assign ,new-var (- ,flat-exp)))
-     (values new-var (append flat-assigns (list new-assign)) (append flat-all-vars (list new-var)))]
-
-    [`(+ ,v1 ,v2)
-     (define-values (LHS-exp LHS-assigns LHS-vars) (flatten v1))
-     (define-values (RHS-exp RHS-assigns RHS-vars) (flatten v2))
-     (define new-var (gensym `tmp))
-     (define new-assign `(assign ,new-var (+ ,LHS-exp ,RHS-exp)))
-     (values new-var (append LHS-assigns RHS-assigns (list new-assign)) (append LHS-vars RHS-vars (list new-var)))]  
-
-    [`(let ([,x ,v]) ,body)
-     (define-values (flat-exp flat-assigns flat-all-vars) (flatten v))
-     (define new-assign `(assign ,x ()))
-     (values 1 2 3)]
+     (define-values (flat-exp flat-assigns flat-vars) (flatten v))
+     (define new-var (gensym `temp))
+     (define new-assign `(- ,flat-exp))
+     (values flat-exp 2 3)]
     
-    [`(program ,body)
-     (define-values (flat-exp flat-assigns flat-all-vars) (flatten body))
-     `(program ,flat-all-vars ,flat-assigns (return ,flat-exp))]
     
     ))
 
@@ -114,7 +99,7 @@
 ;; Program to test
 (define program
   `(program
-    (+ (- 4) (- 5))
+    (- 10)
     )
   )
 
@@ -130,4 +115,4 @@
   (newline)
   (print "Testing flatten...")
   (newline)
-  (flatten program))
+  (flatten-R1 program Key-Value-Empty))
