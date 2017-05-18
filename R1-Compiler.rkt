@@ -28,13 +28,13 @@
 
     [`(let ([,x ,v]) ,body)
      (define-values (flat-exp flat-assigns flat-all-vars) (flatten v))
-     (define new-assign `(assign ,x ()))
-     (values 1 2 3)]
+     (define new-assign `(assign ,x (,flat-exp)))
+     (define-values (body-flat-exp body-flat-assigns body-flat-all-vars) (flatten body))
+     (values body-flat-exp (append flat-assigns (list new-assign) body-flat-assigns) (append flat-all-vars body-flat-all-vars (list x)))] 
     
     [`(program ,body)
      (define-values (flat-exp flat-assigns flat-all-vars) (flatten body))
-     `(program ,flat-all-vars ,flat-assigns (return ,flat-exp))]
-    
+     `(program ,flat-all-vars ,flat-assigns (return ,flat-exp))] 
     ))
 
 ;;;
@@ -114,7 +114,7 @@
 ;; Program to test
 (define program
   `(program
-    (+ (- 4) (- 5))
+    (let ([x (+ (- 4) (- 5))]) (+ x 2))
     )
   )
 
