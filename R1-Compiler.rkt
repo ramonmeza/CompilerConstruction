@@ -66,7 +66,53 @@
 ;;; Select Instructions
 ;;;
 (define (select-instructions prog)
-  (list `program (cadr prog) (cddr prog)))
+  (define (si-body exp)
+    (define assign (car exp))
+    (match assign
+      [`(assign ,var ,(? integer? v))
+       `int]
+      [`(assign ,var ,(? symbol? v))
+       `symbol]
+
+      ;; Addition with ints
+      [`(assign ,var (+ (? integer? LHS) ,RHS))
+       `addLHSInt]
+      [`(assign ,var (+ ,LHS ,(? integer? RHS)))
+       `addRHSInt]
+      [`(assign ,var (+ ,(? integer? LHS) ,(? integer? RHS)))
+       `addInts]
+
+      ;; Addition with symbols
+      [`(assign ,var (+ (? symbol? LHS) ,RHS))
+       `addLHSSymbol]
+      [`(assign ,var (+ ,LHS ,(? symbol? RHS)))
+       `addRHSSymbol]
+      [`(assign ,var (+ ,(? symbol? LHS) ,(? symbol? RHS)))
+       `addSymbols]
+
+      ;; Addition between a symbol and integer
+      [`(assign ,var (+ ,(? integer? LHS) ,(? symbol? RHS)))
+       `addIntSymbol]
+      [`(assign ,var (+ ,(? symbol? LHS) ,(? integer? RHS)))
+       `addSymbolInt]
+
+      ;; Read
+      [`(assign ,var (read))
+       `read]
+
+      ;; Negation
+      [`(assign ,var (- ,var))
+       `negateSelf]
+      [`(assign ,var (- ,(? integer? v)))
+       `negateInt]
+      [`(assign ,var (- ,(? symbol? v)))
+       `negateSymbol]
+
+      ;; Return
+      [`(return ,v)
+       `return]
+      ))
+  (list `program (cadr prog) (si-body (cddr prog))))
 
 ;;;
 ;;; R1 Interpreter
