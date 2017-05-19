@@ -65,11 +65,8 @@
 ;;;
 ;;; Select Instructions
 ;;;
-(define (select-instructions exp)
-  (match exp
-    [`(program ,vars ,assigns ,return)
-     `(program ,vars)]
-    ))
+(define (select-instructions prog)
+  (list `program (cadr prog) (cddr prog)))
 
 ;;;
 ;;; R1 Interpreter
@@ -141,3 +138,8 @@
   (flatten-R1 program))
 
 ;; Test select instructions
+(module+ test
+  (newline)
+  (print "Testing select-instructions...")
+  (newline)
+  (select-instructions (flatten-R1 program)))
