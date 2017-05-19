@@ -27,6 +27,7 @@
 ;;;
 ;;; Flatten
 ;;;
+;; Problem with let: produces unnecessary assign statement...
 (define (flatten-R1 exp)
   (match exp
     [(? symbol?) (values exp `() `())]
@@ -66,53 +67,54 @@
 ;;; Select Instructions
 ;;;
 (define (select-instructions prog)
-  (define (si-body exp)
+  (define (si-body exp insts)
     (define assign (car exp))
     (match assign
+      ;; (assign var (integer))
       [`(assign ,var ,(? integer? v))
-       `int]
-      [`(assign ,var ,(? symbol? v))
-       `symbol]
-
-      ;; Addition with ints
-      [`(assign ,var (+ (? integer? LHS) ,RHS))
-       `addLHSInt]
-      [`(assign ,var (+ ,LHS ,(? integer? RHS)))
-       `addRHSInt]
-      [`(assign ,var (+ ,(? integer? LHS) ,(? integer? RHS)))
-       `addInts]
-
-      ;; Addition with symbols
-      [`(assign ,var (+ (? symbol? LHS) ,RHS))
-       `addLHSSymbol]
-      [`(assign ,var (+ ,LHS ,(? symbol? RHS)))
-       `addRHSSymbol]
-      [`(assign ,var (+ ,(? symbol? LHS) ,(? symbol? RHS)))
-       `addSymbols]
-
-      ;; Addition between a symbol and integer
-      [`(assign ,var (+ ,(? integer? LHS) ,(? symbol? RHS)))
-       `addIntSymbol]
-      [`(assign ,var (+ ,(? symbol? LHS) ,(? integer? RHS)))
-       `addSymbolInt]
-
-      ;; Read
+       (define asm (list `(movq (int ,v) (var ,var))))
+       (si-body (cdr exp) (append asm insts))]
+      ;; (assign var (read))
       [`(assign ,var (read))
-       `read]
+       (define asm (list `(callq read_int) `(movq (reg rax) (var ,var))))
+       (si-body (cdr exp) (append asm insts))]
+      ;; (assign var (symbol))
+      [`(assign ,var (,(? symbol? v)))
+       (define asm (list `(movq (var ,v) (var ,var))))
+       (si-body (cdr exp) (append asm insts))]
+
+      ;; Addition
+      ;; (assign var (+ int int))
+      [`(assign ,var (+ ,(? integer? LHS) ,(? integer? RHS)))
+       (define asm (list `(addq (int ,LHS) (var ,var)) `(movq (int ,RHS) (var ,var))))
+       (si-body (cdr exp) (append asm insts))]
+      ;; (assign var (+ symbol symbol))
+      [`(assign ,var (+ ,(? symbol? LHS) ,(? symbol? RHS)))
+       (define asm (list `(addq (var ,LHS) (var ,var)) `(movq (var ,RHS) (var ,var))))
+       (si-body (cdr exp) (append asm insts))]
+      ;; (assign var (+ int symbol))
+      ;; (assign var (+ symbol int))
+      [(or `(assign ,var (+ ,(? integer? i) ,(? symbol? s)))
+           `(assign ,var (+ ,(? symbol? s) ,(? integer? i))))
+       (define asm (list `(addq (int ,i) (var ,var)) `(movq (var ,s) (var ,var))))
+       (si-body (cdr exp) (append asm insts))]
 
       ;; Negation
-      [`(assign ,var (- ,var))
-       `negateSelf]
+      ;; (assign var (- int))
       [`(assign ,var (- ,(? integer? v)))
-       `negateInt]
+       (define asm (list `(negq (var ,var)) `(movq (int ,v) (var ,var))))
+       (si-body (cdr exp) (append asm insts))]
+      ;; (assign var (- symbol))
       [`(assign ,var (- ,(? symbol? v)))
-       `negateSymbol]
+       (define asm (list `(negq (var ,var)) `(movq (var ,v) (var ,var))))
+       (si-body (cdr exp) (append asm insts))]
 
-      ;; Return
+      ;; (return var)
       [`(return ,v)
-       `return]
+       (define asm (list `(movq (var ,v) (reg rax))))
+       (append asm insts)]
       ))
-  (list `program (cadr prog) (si-body (cddr prog))))
+  (list* `program (cadr prog) (reverse (si-body (cddr prog) `()))))
 
 ;;;
 ;;; R1 Interpreter
@@ -165,7 +167,7 @@
 ;; Program to test
 (define program
   `(program
-    (let ([x (+ (- (read)) (- 5))]) (+ x 2))
+    (+ (- 1) (- 2))
     )
   )
 
