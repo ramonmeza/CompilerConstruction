@@ -51,9 +51,11 @@
      (define new-assign `(assign ,new-var (+ ,LHS-exp ,RHS-exp)))
      (values new-var (append LHS-assigns RHS-assigns (list new-assign)) (append LHS-vars RHS-vars (list new-var)))]  
 
+    ;; Slightly incorrect...
+    ;; Does recursion then sets variable to returned variable
     [`(let ([,x ,v]) ,body)
      (define-values (flat-exp flat-assigns flat-all-vars) (flatten-R1 v))
-     (define new-assign `(assign ,x (,flat-exp)))
+     (define new-assign `(assign ,x ,flat-exp))
      (define-values (body-flat-exp body-flat-assigns body-flat-all-vars) (flatten-R1 body))
      (values body-flat-exp (append flat-assigns (list new-assign) body-flat-assigns) (append flat-all-vars body-flat-all-vars (list x)))] 
     
@@ -66,55 +68,73 @@
 ;;;
 ;;; Select Instructions
 ;;;
-(define (select-instructions prog)
-  (define (si-body exp insts)
-    (define assign (car exp))
-    (match assign
-      ;; (assign var (integer))
-      [`(assign ,var ,(? integer? v))
-       (define asm (list `(movq (int ,v) (var ,var))))
-       (si-body (cdr exp) (append asm insts))]
-      ;; (assign var (read))
-      [`(assign ,var (read))
-       (define asm (list `(callq read_int) `(movq (reg rax) (var ,var))))
-       (si-body (cdr exp) (append asm insts))]
-      ;; (assign var (symbol))
-      [`(assign ,var (,(? symbol? v)))
-       (define asm (list `(movq (var ,v) (var ,var))))
-       (si-body (cdr exp) (append asm insts))]
+(define (select-instructions p)
+  (define (select-instruction prog inst)
+    (define exp (car prog))
+    (match exp
+      ;; Read
+      [`(assign ,LHS (read))
+       (define asm (list `(callq read_int) `(movq (reg rax) (var ,LHS))))
+       (select-instruction  (cdr prog) (append inst asm))]
+
+      ;; Integer
+      [`(assign ,LHS ,(? integer? v))
+       (define asm (list `(movq (int ,v) (var ,LHS))))
+       (select-instruction  (cdr prog) (append inst asm))]
+
+      ;; Symbols
+      [`(assign ,LHS ,(? symbol? v))
+       (define asm (list `(movq (var ,v) (var ,LHS))))
+       (select-instruction  (cdr prog) (append inst asm))]
 
       ;; Addition
-      ;; (assign var (+ int int))
-      [`(assign ,var (+ ,(? integer? LHS) ,(? integer? RHS)))
-       (define asm (list `(addq (int ,LHS) (var ,var)) `(movq (int ,RHS) (var ,var))))
-       (si-body (cdr exp) (append asm insts))]
-      ;; (assign var (+ symbol symbol))
-      [`(assign ,var (+ ,(? symbol? LHS) ,(? symbol? RHS)))
-       (define asm (list `(addq (var ,LHS) (var ,var)) `(movq (var ,RHS) (var ,var))))
-       (si-body (cdr exp) (append asm insts))]
-      ;; (assign var (+ int symbol))
-      ;; (assign var (+ symbol int))
-      [(or `(assign ,var (+ ,(? integer? i) ,(? symbol? s)))
-           `(assign ,var (+ ,(? symbol? s) ,(? integer? i))))
-       (define asm (list `(addq (int ,i) (var ,var)) `(movq (var ,s) (var ,var))))
-       (si-body (cdr exp) (append asm insts))]
+      [(or `(assign ,LHS (+ ,(? integer? v) ,LHS))
+           `(assign ,LHS (+ ,LHS ,(? integer? v))))
+       (define asm (list `(addq (int ,v) (var ,LHS))))
+       (select-instruction (cdr prog) (append inst asm))]
+      
+      [(or `(assign ,LHS (+ ,(? symbol? v) ,LHS))
+           `(assign ,LHS (+ ,LHS ,(? symbol? v))))
+       (define asm (list `(addq (var ,v) (var ,LHS))))
+       (select-instruction (cdr prog) (append inst asm))]
+      
+      [`(assign ,LHS (+ ,(? integer? v1) ,(? integer? v2)))
+       (define asm (list `(movq (int ,v1) (var ,LHS)) `(addq (int ,v2) (var ,LHS))))
+       (select-instruction  (cdr prog) (append inst asm))]
 
+      [`(assign ,LHS (+ ,(? symbol? v1) ,(? symbol? v2)))
+       (define asm (list `(movq (var ,v1) (var ,LHS)) `(addq (var ,v2) (var ,LHS))))
+       (select-instruction  (cdr prog) (append inst asm))]
+
+      [`(assign ,LHS (+ ,(? integer? v1) ,(? symbol? v2)))
+       (define asm (list `(movq (int ,v1) (var ,LHS)) `(addq (var ,v2) (var ,LHS))))
+       (select-instruction  (cdr prog) (append inst asm))]
+
+      [`(assign ,LHS (+ ,(? symbol? v1) ,(? integer? v2)))
+       (define asm (list `(movq (var ,v1) (var ,LHS)) `(addq (int ,v2) (var ,LHS))))
+       (select-instruction  (cdr prog) (append inst asm))]  
+         
       ;; Negation
-      ;; (assign var (- int))
-      [`(assign ,var (- ,(? integer? v)))
-       (define asm (list `(negq (var ,var)) `(movq (int ,v) (var ,var))))
-       (si-body (cdr exp) (append asm insts))]
-      ;; (assign var (- symbol))
-      [`(assign ,var (- ,(? symbol? v)))
-       (define asm (list `(negq (var ,var)) `(movq (var ,v) (var ,var))))
-       (si-body (cdr exp) (append asm insts))]
+      [`(assign ,LHS (- ,LHS))
+       (define asm (list `(negq (var ,LHS))))
+       (select-instruction  (cdr prog) (append inst asm))]
+      
+      [`(assign ,LHS (- ,(? integer? v)))
+       (define asm (list `(movq (int ,v) (var ,LHS)) `(negq (var ,LHS))))
+       (select-instruction  (cdr prog) (append inst asm))]
+      
+      [`(assign ,LHS (- ,(? symbol? v)))
+       (define asm (list `(movq (var ,v) (var ,LHS)) `(negq (var ,LHS))))
+       (select-instruction  (cdr prog) (append inst asm))]
 
-      ;; (return var)
+      ;; Match return
       [`(return ,v)
        (define asm (list `(movq (var ,v) (reg rax))))
-       (append asm insts)]
+       (append inst asm)]
       ))
-  (list* `program (cadr prog) (reverse (si-body (cddr prog) `()))))
+  (define vars (cadr p))
+  (define assigns (select-instruction (cddr p) `()))
+  (list* `program vars assigns))
 
 ;;;
 ;;; R1 Interpreter
@@ -167,7 +187,7 @@
 ;; Program to test
 (define program
   `(program
-    (+ (- 1) (- 2))
+    (let ([x (+ (- 10) 11)]) (+ x 41))
     )
   )
 
