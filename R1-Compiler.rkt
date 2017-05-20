@@ -137,6 +137,12 @@
   (list* `program vars assigns))
 
 ;;;
+;;; Assign Homes
+;;;
+(define (assign-homes asm)
+  asm)
+
+;;;
 ;;; R1 Interpreter
 ;;;
 (define (interp-R1 p)
@@ -191,6 +197,12 @@
     )
   )
 
+(module+ test
+  (newline)
+  (print "Given program...")
+  (newline)
+  program)
+
 ;; Test uniquify
 (module+ test
   (newline)
@@ -203,11 +215,18 @@
   (newline)
   (print "Testing flatten-R1...")
   (newline)
-  (flatten-R1 program))
+  (flatten-R1 (uniquify program)))
 
-;; Test select instructions
+;; Test select-instructions
 (module+ test
   (newline)
   (print "Testing select-instructions...")
   (newline)
-  (select-instructions (flatten-R1 program)))
+  (select-instructions (flatten-R1 (uniquify program))))
+
+;; Test assign-homes
+(module+ test
+  (newline)
+  (print "Testing assign-homes...")
+  (newline)
+  (assign-homes (select-instructions (flatten-R1 (uniquify program)))))
