@@ -139,8 +139,14 @@
 ;;;
 ;;; Assign Homes
 ;;;
-(define (assign-homes asm)
-  asm)
+(define (assign-homes p)
+  (match-define `(program ,vars ,asm ...) p)
+
+  (define (create-homes lst offset) 1)
+
+  
+  (define homes (create-homes vars 8))
+  homes)
 
 ;;;
 ;;; R1 Interpreter
@@ -183,8 +189,15 @@
     [(Key-Value-Empty) (error `Key-Value-Lookup "Key: ~e was not found" PassedKey)]
     [(Key-Value-Node Key Value Rest)
      (if (eq? PassedKey Key) Value
-         (Key-Value-Lookup PassedKey Rest))]
+         (Key-Value-Lookup Rest PassedKey))]
+         ;(Key-Value-Lookup PassedKey Rest))]
     ))
+
+(define test
+  (let ([node1 (Key-Value-Node `x 1 (Key-Value-Empty))])
+    (let ([node2 (Key-Value-Node `y 2 node1)])
+      (let ([node3 (Key-Value-Node `z 3 node2)])
+        node3))))
 
 ;;;
 ;;; Test Modules
