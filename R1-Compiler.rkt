@@ -142,11 +142,49 @@
 (define (assign-homes p)
   (match-define `(program ,vars ,asm ...) p)
 
-  (define (create-homes lst offset) 1)
+  ;; Put variables into a key-value map with value being their offset on the stack
+  (define (create-homes lst offset)
+    (cond
+      [(empty? lst) (Key-Value-Empty)]
+      [else (Key-Value-Node (car lst) offset (create-homes (cdr lst) (+ offset 8)))])
+    )
 
-  
+  ;; Save the key-value map for later use
   (define homes (create-homes vars 8))
-  homes)
+
+  ;; Replace all instances of vars
+  (define (fix-homes lst asm)
+    (cond
+      [(empty? lst) asm]
+      [else
+       (match (car lst)
+         [`(,inst (var ,v1) (reg ,v2))
+          (define new-inst (list `(,inst ,(Key-Value-Lookup homes v1) reg ,v2)))
+          (fix-homes (cdr lst) (append asm new-inst))]
+         
+         [`(,inst (var ,v1) (var ,v2))
+          (define new-inst (list `(,inst ,(Key-Value-Lookup homes v1) ,(Key-Value-Lookup homes v2))))
+          (fix-homes (cdr lst) (append asm new-inst))]
+         
+         [`(,inst (int ,v1) (var ,v2))
+          (define new-inst (list `(,inst ,v1 ,(Key-Value-Lookup homes v2))))
+          (fix-homes (cdr lst) (append asm new-inst))]
+         
+         [`(,inst (var ,v1) (int ,v2))
+          (define new-inst (list `(,inst ,(Key-Value-Lookup homes v1) ,v2)))
+          (fix-homes (cdr lst) (append asm new-inst))]
+         
+         [`(,inst (var ,v))
+          (define new-inst (list `(,inst ,(Key-Value-Lookup homes v))))
+          (fix-homes (cdr lst) (append asm new-inst))]
+
+         [`(callq ,v)
+          (define new-inst (list `(callq ,v)))
+          (fix-homes (cdr lst) (append asm new-inst))]
+         )]
+      ))
+
+  (fix-homes asm `()))
 
 ;;;
 ;;; R1 Interpreter
@@ -192,12 +230,6 @@
          (Key-Value-Lookup Rest PassedKey))]
          ;(Key-Value-Lookup PassedKey Rest))]
     ))
-
-(define test
-  (let ([node1 (Key-Value-Node `x 1 (Key-Value-Empty))])
-    (let ([node2 (Key-Value-Node `y 2 node1)])
-      (let ([node3 (Key-Value-Node `z 3 node2)])
-        node3))))
 
 ;;;
 ;;; Test Modules
