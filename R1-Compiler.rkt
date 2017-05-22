@@ -150,7 +150,7 @@
     )
 
   ;; Save the key-value map for later use
-  (define homes (create-homes vars -8))
+  (define homes (create-homes (reverse vars) -8))
 
   ;; Replace all instances of vars
   (define (fix-homes lst asm)
@@ -160,24 +160,19 @@
        (match (car lst)
          [`(,inst (var ,v1) (reg ,v2))
           (define new-inst (list `(,inst (deref rbp ,(Key-Value-Lookup homes v1)) (reg ,v2))))
-          (fix-homes (cdr lst) (append asm new-inst))]
-         
+          (fix-homes (cdr lst) (append asm new-inst))]         
          [`(,inst (var ,v1) (var ,v2))
           (define new-inst (list `(,inst (deref rbp ,(Key-Value-Lookup homes v1)) (deref rbp ,(Key-Value-Lookup homes v2)))))
-          (fix-homes (cdr lst) (append asm new-inst))]
-         
+          (fix-homes (cdr lst) (append asm new-inst))]        
          [`(,inst (int ,v1) (var ,v2))
           (define new-inst (list `(,inst (int ,v1) (deref rbp ,(Key-Value-Lookup homes v2)))))
-          (fix-homes (cdr lst) (append asm new-inst))]
-         
+          (fix-homes (cdr lst) (append asm new-inst))]         
          [`(,inst (var ,v1) (int ,v2))
           (define new-inst (list `(,inst (deref rbp ,(Key-Value-Lookup homes v1)) (int ,v2))))
-          (fix-homes (cdr lst) (append asm new-inst))]
-         
+          (fix-homes (cdr lst) (append asm new-inst))] 
          [`(,inst (var ,v))
           (define new-inst (list `(,inst (deref rbp ,(Key-Value-Lookup homes v)))))
           (fix-homes (cdr lst) (append asm new-inst))]
-
          [`(callq ,v)
           (define new-inst (list `(callq ,v)))
           (fix-homes (cdr lst) (append asm new-inst))]
@@ -185,6 +180,28 @@
       ))
 
   (list* `program (* (length vars) 8) (fix-homes asm `())))
+
+;;;
+;;; Patch Instructions
+;;;
+(define (patch-instructions p)
+  (match-define `(program ,frame ,insts ...) p)
+  (define (pi lst patched)
+    (cond
+      [(empty? lst) patched]
+      [else
+       (match (car lst)
+         [`(,inst (deref ,src ,srci) (deref ,dest ,desti))
+          (define fix (list `(movq (deref ,src ,srci) (reg rax)) `(movq (reg rax) (deref ,dest ,desti))))
+          (pi (cdr lst) (append patched fix))]
+         
+         [`(,inst ,src ,dest)
+          (define fix (list `(,inst ,src ,dest)))
+          (pi (cdr lst) (append patched fix))]
+         )])
+    )
+  (list* `program frame (pi insts `())))
+
 
 ;;;
 ;;; R1 Interpreter
@@ -238,7 +255,7 @@
 ;; Program to test
 (define program
   `(program
-    (let ([x (+ (- 10) 11)]) (+ x 41))
+    (let ([a 42]) (let ([b a]) b))
     )
   )
 
@@ -275,3 +292,10 @@
   (print "Testing assign-homes...")
   (newline)
   (assign-homes (select-instructions (flatten-R1 (uniquify program)))))
+
+;; Test patch-instructions
+(module+ test
+  (newline)
+  (print "Testing patch-instructions...")
+  (newline)
+  (patch-instructions (assign-homes (select-instructions (flatten-R1 (uniquify program))))))
