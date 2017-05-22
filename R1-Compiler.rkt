@@ -146,11 +146,11 @@
   (define (create-homes lst offset)
     (cond
       [(empty? lst) (Key-Value-Empty)]
-      [else (Key-Value-Node (car lst) offset (create-homes (cdr lst) (+ offset 8)))])
+      [else (Key-Value-Node (car lst) offset (create-homes (cdr lst) (- offset 8)))])
     )
 
   ;; Save the key-value map for later use
-  (define homes (create-homes vars 8))
+  (define homes (create-homes vars -8))
 
   ;; Replace all instances of vars
   (define (fix-homes lst asm)
@@ -159,23 +159,23 @@
       [else
        (match (car lst)
          [`(,inst (var ,v1) (reg ,v2))
-          (define new-inst (list `(,inst ,(Key-Value-Lookup homes v1) reg ,v2)))
+          (define new-inst (list `(,inst (deref rbp ,(Key-Value-Lookup homes v1)) (reg ,v2))))
           (fix-homes (cdr lst) (append asm new-inst))]
          
          [`(,inst (var ,v1) (var ,v2))
-          (define new-inst (list `(,inst ,(Key-Value-Lookup homes v1) ,(Key-Value-Lookup homes v2))))
+          (define new-inst (list `(,inst (deref rbp ,(Key-Value-Lookup homes v1)) (deref rbp ,(Key-Value-Lookup homes v2)))))
           (fix-homes (cdr lst) (append asm new-inst))]
          
          [`(,inst (int ,v1) (var ,v2))
-          (define new-inst (list `(,inst ,v1 ,(Key-Value-Lookup homes v2))))
+          (define new-inst (list `(,inst (int ,v1) (deref rbp ,(Key-Value-Lookup homes v2)))))
           (fix-homes (cdr lst) (append asm new-inst))]
          
          [`(,inst (var ,v1) (int ,v2))
-          (define new-inst (list `(,inst ,(Key-Value-Lookup homes v1) ,v2)))
+          (define new-inst (list `(,inst (deref rbp ,(Key-Value-Lookup homes v1)) (int ,v2))))
           (fix-homes (cdr lst) (append asm new-inst))]
          
          [`(,inst (var ,v))
-          (define new-inst (list `(,inst ,(Key-Value-Lookup homes v))))
+          (define new-inst (list `(,inst (deref rbp ,(Key-Value-Lookup homes v)))))
           (fix-homes (cdr lst) (append asm new-inst))]
 
          [`(callq ,v)
@@ -184,7 +184,7 @@
          )]
       ))
 
-  (fix-homes asm `()))
+  (list* `program (* (length vars) 8) (fix-homes asm `())))
 
 ;;;
 ;;; R1 Interpreter
